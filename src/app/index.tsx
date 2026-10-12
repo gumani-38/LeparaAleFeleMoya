@@ -1,98 +1,127 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from "expo-router";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+// Import our custom components
+import { HeroSection } from "@/components/ui/hero-section";
+import { HomeEvent } from "@/components/ui/home-event";
+import { ProductItem } from "@/components/ui/product-item";
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* 1. Main Hero Content Layout */}
+      <HeroSection
+        label="React Native / Community Concept"
+        title={`Wear purpose.\nShare\npossibility.`}
+        description="Clothing, community and everyday acts of care. Find your way to get involved."
+        buttonText="Shop for a purpose"
+        onButtonPress={() => router.push("/shop")}
+      />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      {/* 2. Full-Width Core Centerpiece Graphic */}
+      <View style={styles.bannerContainer}>
+        <Image
+          source={{ uri: "https://unsplash.com" }} // Replace with your local black-and-white asset
+          style={styles.bannerImage}
+        />
+      </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+      {/* 3. Mid-Section Title Bar */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Everyday essentials</Text>
+        <Text style={styles.sectionLink} onPress={() => router.push("/shop")}>
+          Shop all ↗
+        </Text>
+      </View>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      {/* 4. Multi-Card Dynamic Component Grid Layout */}
+      <View style={styles.grid}>
+        <ProductItem
+          imageUrl="https://unsplash.com"
+          name="Community tee"
+          price="R250"
+          subtitle="White / Cotton / XS–XXL"
+          onPress={() => router.push("/shop")}
+        />
+        <ProductItem
+          imageUrl="https://unsplash.com"
+          name="Everyday hoodie"
+          price="R550"
+          subtitle="Black / Cotton blend / S–XXL"
+          onPress={() => router.push("/shop")}
+        />
+      </View>
+
+      <View style={styles.divider} />
+
+      {/* 5. Highlight Event Block */}
+      <HomeEvent
+        tag="Upcoming · Sample event"
+        title="Community clothing drive"
+        meta="24 Oct · 10:00–14:00 · Soweto"
+        buttonText="Explore the event"
+        onPress={() => router.push("/events")}
+      />
+
+      <Text style={styles.footerText}>
+        Design concept · All products and events are sample data.
+      </Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: "#ffffff",
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  bannerContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 28,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  bannerImage: {
+    width: "100%",
+    height: 200,
+    backgroundColor: "#f6f6f6",
   },
-  title: {
-    textAlign: 'center',
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  code: {
-    textTransform: 'uppercase',
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#000000",
+    letterSpacing: -0.5,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  sectionLink: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#000000",
+  },
+  grid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#eeeeee",
+    marginHorizontal: 20,
+    marginVertical: 12,
+  },
+  footerText: {
+    fontSize: 11,
+    color: "#999999",
+    textAlign: "center",
+    paddingHorizontal: 20,
+    marginBottom: 32,
+    marginTop: 8,
   },
 });
