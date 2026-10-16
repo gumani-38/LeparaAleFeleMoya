@@ -12,6 +12,7 @@ import {
   getAccessToken,
   getResponseUser,
 } from "@/lib/api";
+import { fetchCustomerOrders, type OrderSummary } from "@/lib/orders";
 import {
   validateEmail,
   validateFields,
@@ -20,7 +21,6 @@ import {
   validatePhone,
   validateRequired,
 } from "@/lib/validation";
-import { fetchCustomerOrders, type OrderSummary } from "@/lib/orders";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
@@ -124,7 +124,9 @@ export default function AccountScreen() {
         });
         const user = getResponseUser(response);
         if (!user) {
-          throw new Error("The profile response did not contain account details.");
+          throw new Error(
+            "The profile response did not contain account details.",
+          );
         }
 
         if (isCurrent) {
@@ -606,7 +608,9 @@ export default function AccountScreen() {
                   <View key={order.orderNumber} style={styles.orderCard}>
                     <View style={styles.orderHeaderRow}>
                       <View style={styles.orderHeading}>
-                        <Text style={styles.orderIdText}>{order.orderNumber}</Text>
+                        <Text style={styles.orderIdText}>
+                          {order.orderNumber}
+                        </Text>
                         <Text style={styles.orderDateMeta}>
                           {formatOrderDate(order.placedAt)}
                         </Text>
@@ -647,7 +651,9 @@ export default function AccountScreen() {
                     {isLoadingMoreOrders ? (
                       <ActivityIndicator color="#111111" />
                     ) : (
-                      <Text style={styles.ordersRetryText}>Load more orders</Text>
+                      <Text style={styles.ordersRetryText}>
+                        Load more orders
+                      </Text>
                     )}
                   </TouchableOpacity>
                 ) : null}
@@ -659,17 +665,12 @@ export default function AccountScreen() {
         {activeSubTab === "Profile" && (
           <View style={styles.formPaddingContainer}>
             {isProfileLoading ? (
-              <ActivityIndicator
-                style={styles.profileStatus}
-                color="#111111"
-              />
+              <ActivityIndicator style={styles.profileStatus} color="#111111" />
             ) : profileError ? (
               <View style={styles.profileStatus}>
                 <Text style={styles.profileErrorText}>{profileError}</Text>
                 <TouchableOpacity
-                  onPress={() =>
-                    setProfileRetryCount((count) => count + 1)
-                  }
+                  onPress={() => setProfileRetryCount((count) => count + 1)}
                 >
                   <Text style={styles.profileRetryText}>Try again</Text>
                 </TouchableOpacity>
@@ -723,7 +724,9 @@ export default function AccountScreen() {
             />
             <TouchableOpacity
               style={styles.primaryBlackBtn}
-              disabled={isSubmitting || isProfileLoading || Boolean(profileError)}
+              disabled={
+                isSubmitting || isProfileLoading || Boolean(profileError)
+              }
               onPress={handleSaveProfile}
             >
               <Text style={styles.primaryBlackBtnText}>
@@ -898,9 +901,7 @@ export default function AccountScreen() {
             onPress={handleCreateAccount}
           >
             <Text style={styles.primaryBlackBtnText}>
-              {isSubmitting
-                ? "Creating account..."
-                : "Create account & send code"}
+              {isSubmitting ? "Creating account..." : "Create account"}
             </Text>
           </TouchableOpacity>
 
@@ -923,7 +924,9 @@ export default function AccountScreen() {
             color="#111111"
             style={styles.verifyShield}
           />
-          <Text style={styles.verifyStepLabel}>ACCOUNT SETUP · STEP 2 OF 2</Text>
+          <Text style={styles.verifyStepLabel}>
+            ACCOUNT SETUP · STEP 2 OF 2
+          </Text>
           <Text style={styles.verifyTitle}>Check your inbox.</Text>
           <View style={styles.verifyStatus}>
             <Ionicons name="checkmark" size={13} color="#111111" />
@@ -991,7 +994,8 @@ export default function AccountScreen() {
             <Text style={styles.changeEmailText}>Change email address</Text>
           </TouchableOpacity>
           <Text style={styles.verifyFooterNote}>
-            Verification codes are sent to your email and expire after 10 minutes.
+            Verification codes are sent to your email and expire after 10
+            minutes.
           </Text>
         </View>
       );
@@ -1065,9 +1069,6 @@ function readUserField(
   return "";
 }
 
-// ========================================================
-// PART 4: SYSTEM DESIGN STYLESHEET
-// ========================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#ffffff" },
   contentWrapper: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
