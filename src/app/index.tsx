@@ -1,13 +1,53 @@
 import { useRouter } from "expo-router";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-// Import our custom components
 import { HeroSection } from "@/components/ui/hero-section";
 import { HomeEvent } from "@/components/ui/home-event";
 import { ProductItem } from "@/components/ui/product-item";
+import { fetchShopProducts, type ShopProduct } from "@/lib/products";
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadProducts = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const result = await fetchShopProducts();
+        if (isCurrent) setProducts(result);
+      } catch (error) {
+        if (isCurrent) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Could not load products. Please try again.",
+          );
+        }
+      } finally {
+        if (isCurrent) setIsLoading(false);
+      }
+    };
+
+    void loadProducts();
+    return () => {
+      isCurrent = false;
+    };
+  }, [retryCount]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -20,15 +60,6 @@ export default function HomeScreen() {
         onButtonPress={() => router.push("/shop")}
       />
 
-      {/* 2. Full-Width Core Centerpiece Graphic */}
-      <View style={styles.bannerContainer}>
-        <Image
-          source={{ uri: "https://unsplash.com" }} // Replace with your local black-and-white asset
-          style={styles.bannerImage}
-        />
-      </View>
-
-      {/* 3. Mid-Section Title Bar */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Everyday essentials</Text>
         <Text style={styles.sectionLink} onPress={() => router.push("/shop")}>
@@ -36,22 +67,30 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* 4. Multi-Card Dynamic Component Grid Layout */}
       <View style={styles.grid}>
-        <ProductItem
-          imageUrl="https://unsplash.com"
-          name="Community tee"
-          price="R250"
-          subtitle="White / Cotton / XS–XXL"
-          onPress={() => router.push("/shop")}
-        />
-        <ProductItem
-          imageUrl="https://unsplash.com"
-          name="Everyday hoodie"
-          price="R550"
-          subtitle="Black / Cotton blend / S–XXL"
-          onPress={() => router.push("/shop")}
-        />
+        {isLoading ? (
+          <ActivityIndicator style={styles.loading} color="#111111" />
+        ) : loadError ? (
+          <View style={styles.loadMessage}>
+            <Text style={styles.loadMessageText}>{loadError}</Text>
+            <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)}>
+              <Text style={styles.retryText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : products.length > 0 ? (
+          products.slice(0, 2).map((product) => (
+            <ProductItem
+              key={product.id}
+              imageUrl={product.imageUrl}
+              name={product.name}
+              price={product.price}
+              subtitle={product.subtitle}
+              onPress={() => router.push("/shop")}
+            />
+          ))
+        ) : (
+          <Text style={styles.loadMessageText}>No products are available right now.</Text>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -66,7 +105,7 @@ export default function HomeScreen() {
       />
 
       <Text style={styles.footerText}>
-        Design concept · All products and events are sample data.
+        Product prices and availability are provided by Lepara Ale Fele Moya.
       </Text>
     </ScrollView>
   );
@@ -76,15 +115,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
-  },
-  bannerContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 28,
-  },
-  bannerImage: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#f6f6f6",
   },
   sectionHeader: {
     flexDirection: "row",
@@ -109,6 +139,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     marginBottom: 16,
+  },
+  loading: {
+    marginVertical: 32,
+  },
+  loadMessage: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 24,
+  },
+  loadMessageText: {
+    color: "#777777",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryText: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 12,
+    textDecorationLine: "underline",
   },
   divider: {
     height: 1,

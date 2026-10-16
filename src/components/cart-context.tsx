@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { ProductVariant } from "@/lib/products";
 
 export type CartProduct = {
   id: string;
@@ -7,11 +8,13 @@ export type CartProduct = {
   subtitle: string;
   category: string;
   imageUrl: string;
+  variants: ProductVariant[];
 };
 
 export type CartItem = CartProduct & {
   lineId: string;
   size: string;
+  variantId: number;
   quantity: number;
 };
 
@@ -33,6 +36,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartContextValue>(() => {
     const addItem: CartContextValue["addItem"] = (product, size, quantity) => {
+      const variant = product.variants.find((item) => item.size === size);
+      if (!variant || quantity < 1) return;
       setItems((current) => {
         const lineId = `${product.id}:${size}`;
         const existing = current.find((item) => item.lineId === lineId);
@@ -40,12 +45,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (existing) {
           return current.map((item) =>
             item.lineId === lineId
-              ? { ...item, quantity: item.quantity + quantity }
+              ? { ...item, quantity: Math.min(10, item.quantity + quantity) }
               : item,
           );
         }
 
-        return [...current, { ...product, lineId, size, quantity }];
+        return [
+          ...current,
+          { ...product, lineId, size, variantId: variant.variantId, quantity: Math.min(10, quantity) },
+        ];
       });
     };
 
@@ -64,6 +72,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setItems((current) => {
         const item = current.find((entry) => entry.lineId === lineId);
         if (!item || item.size === size) return current;
+        const variant = item.variants.find((entry) => entry.size === size);
+        if (!variant) return current;
 
         const nextLineId = `${item.id}:${size}`;
         const matchingItem = current.find(
@@ -80,7 +90,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           .concat(
             matchingItem
               ? []
-              : [{ ...item, lineId: nextLineId, size }],
+              : [{ ...item, lineId: nextLineId, size, variantId: variant.variantId }],
           );
       });
     };

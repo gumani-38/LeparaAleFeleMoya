@@ -1,42 +1,154 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@/components/auth-context";
 import { useCart } from "@/components/cart-context";
-import { useRouter } from "expo-router";
-import { useState } from "react";
 import {
-  Alert,
+  FeedbackDialog,
+  useFeedbackDialog,
+} from "@/components/ui/feedback-dialog";
+import { FormField } from "@/components/ui/form-field";
+import { API_ROUTES, apiRequest, getResponseData } from "@/lib/api";
+import {
+  validateFields,
+  validateName,
+  validatePhone,
+  validatePostalCode,
+  validateText,
+} from "@/lib/validation";
+import { useRouter } from "expo-router";
+import { useRef, useState } from "react";
+import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-const PAYMENT_METHODS = [
-  "Debit / credit card",
-  "EFT bank transfer",
-  "Cash on delivery",
-];
+const PAYMENT_METHODS = ["EFT", "Cash on delivery"] as const;
+
+function createIdempotencyKey(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    return (character === "x" ? random : (random & 0x3) | 0x8).toString(16);
+  });
+}
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const { token, isAuthenticated } = useAuth();
   const { items, subtotal, updateQuantity, updateSize, removeItem, clearCart } =
     useCart();
   const [openSizeLineId, setOpenSizeLineId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
+  const [paymentMethod, setPaymentMethod] = useState<(typeof PAYMENT_METHODS)[number]>(
+    PAYMENT_METHODS[0],
+  );
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
+  const [recipient, setRecipient] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [phone, setPhone] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeliveryValidation, setShowDeliveryValidation] = useState(false);
+  const { dialog, showDialog, closeDialog } = useFeedbackDialog();
+  const idempotencyRef = useRef<{ request: string; key: string } | null>(null);
 
   const delivery = items.length > 0 ? 60 : 0;
   const total = subtotal + delivery;
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (items.length === 0) return;
+    if (!isAuthenticated || !token) {
+      showDialog(
+        "Sign in required",
+        "Sign in to your account before placing an order.",
+        "info",
+        [
+          { label: "Sign in", onPress: () => router.push("/account") },
+          { label: "Not now", variant: "secondary" },
+        ],
+      );
+      return;
+    }
+    setShowDeliveryValidation(true);
+    const validationError = validateFields([
+      { value: recipient, validate: validateName("Recipient name") },
+      { value: streetAddress, validate: validateText("Street address", 5) },
+      { value: city, validate: validateName("City") },
+      { value: postalCode, validate: validatePostalCode },
+      { value: phone, validate: validatePhone },
+    ]);
+    if (validationError) {
+      showDialog("Check your delivery details", validationError);
+      return;
+    }
+    if (!acceptTerms) {
+      showDialog(
+        "Confirmation required",
+        "Please accept the delivery terms before placing your order.",
+      );
+      return;
+    }
+    if (items.some((item) => !Number.isInteger(item.variantId) || item.quantity > 10)) {
+      showDialog(
+        "Check your bag",
+        "One or more items have an invalid size or quantity. Please update your bag and try again.",
+      );
+      return;
+    }
 
-    clearCart();
-    Alert.alert(
-      "Order placed",
-      `Your demo order for R${total.toLocaleString("en-ZA")} has been submitted. No payment was collected.`,
-    );
+    setIsSubmitting(true);
+    try {
+      const orderBody = {
+        items: items.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+        })),
+        recipientName: recipient.trim(),
+        streetAddress: streetAddress.trim(),
+        city: city.trim(),
+        postalCode: postalCode.trim(),
+        phone: phone.trim(),
+        paymentMethod,
+        acceptTerms: true,
+      };
+      const requestFingerprint = JSON.stringify(orderBody);
+      if (idempotencyRef.current?.request !== requestFingerprint) {
+        idempotencyRef.current = {
+          request: requestFingerprint,
+          key: createIdempotencyKey(),
+        };
+      }
+      const response = await apiRequest<unknown>(API_ROUTES.orders, {
+        method: "POST",
+        token,
+        idempotencyKey: idempotencyRef.current.key,
+        body: orderBody,
+      });
+      const data = getResponseData(response);
+      const orderReference =
+        typeof data === "object" &&
+        data !== null &&
+        "orderNumber" in data &&
+        typeof data.orderNumber === "string"
+          ? ` (${data.orderNumber})`
+          : "";
+      clearCart();
+      idempotencyRef.current = null;
+      showDialog(
+        "Order placed",
+        `Your order has been submitted${orderReference}.`,
+        "success",
+      );
+    } catch (error) {
+      showDialog(
+        "Could not place order",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -60,7 +172,11 @@ export default function CheckoutScreen() {
         <Text style={styles.heroTitle}>Your bag. Your purpose.</Text>
 
         <View style={styles.accountBanner}>
-          <Text style={styles.accountText}>Naledi Mokoena · Verified account</Text>
+          <Text style={styles.accountText}>
+            {isAuthenticated
+              ? "Signed-in account"
+              : "Sign in is required to place your order"}
+          </Text>
         </View>
 
         {items.length === 0 ? (
@@ -105,7 +221,7 @@ export default function CheckoutScreen() {
                       style={styles.counterButton}
                       accessibilityLabel={`Increase ${item.name} quantity`}
                       onPress={() =>
-                        updateQuantity(item.lineId, item.quantity + 1)
+                        updateQuantity(item.lineId, Math.min(10, item.quantity + 1))
                       }
                     >
                       <Text style={styles.counterButtonText}>+</Text>
@@ -134,7 +250,10 @@ export default function CheckoutScreen() {
 
                 {openSizeLineId === item.lineId ? (
                   <View style={styles.sizeOptionsWrap}>
-                    {["XS", "S", "M", "L", "XL"].map((option) => (
+                    {item.variants
+                      .filter((variant) => variant.availability.toLowerCase() === "in stock")
+                      .map((variant) => variant.size)
+                      .map((option) => (
                       <TouchableOpacity
                         key={option}
                         style={[
@@ -169,29 +288,78 @@ export default function CheckoutScreen() {
         <Text style={styles.sectionTitle}>01 / Delivery</Text>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Recipient *</Text>
-          <TextInput style={styles.input} value="Naledi Mokoena" />
+          <FormField
+            label="Recipient *"
+            value={recipient}
+            onChangeText={setRecipient}
+            validate={validateName("Recipient name")}
+            showValidation={showDeliveryValidation}
+            autoCapitalize="words"
+            autoComplete="name"
+            placeholder="Full name"
+            maxLength={80}
+            returnKeyType="next"
+          />
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Street address *</Text>
-          <TextInput style={styles.input} value="18 Mofolo Street" />
+          <FormField
+            label="Street address *"
+            value={streetAddress}
+            onChangeText={setStreetAddress}
+            validate={validateText("Street address", 5)}
+            showValidation={showDeliveryValidation}
+            autoCapitalize="words"
+            autoComplete="street-address"
+            placeholder="Street address"
+            maxLength={160}
+            returnKeyType="next"
+          />
         </View>
 
         <View style={styles.rowFields}>
           <View style={[styles.fieldGroup, styles.halfField]}>
-            <Text style={styles.fieldLabel}>City *</Text>
-            <TextInput style={styles.input} value="Soweto" />
+            <FormField
+              label="City *"
+              value={city}
+              onChangeText={setCity}
+              validate={validateName("City")}
+              showValidation={showDeliveryValidation}
+              autoCapitalize="words"
+              placeholder="City"
+              maxLength={80}
+              returnKeyType="next"
+            />
           </View>
           <View style={[styles.fieldGroup, styles.halfField]}>
-            <Text style={styles.fieldLabel}>Postal code *</Text>
-            <TextInput style={styles.input} value="1801" />
+            <FormField
+              label="Postal code *"
+              value={postalCode}
+              onChangeText={setPostalCode}
+              validate={validatePostalCode}
+              showValidation={showDeliveryValidation}
+              keyboardType="number-pad"
+              autoComplete="postal-code"
+              placeholder="e.g. 1801"
+              maxLength={4}
+              returnKeyType="next"
+            />
           </View>
         </View>
 
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Phone *</Text>
-          <TextInput style={styles.input} value="+27 71 234 5678" />
+          <FormField
+            label="Phone *"
+            value={phone}
+            onChangeText={setPhone}
+            validate={validatePhone}
+            showValidation={showDeliveryValidation}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            placeholder="082 123 4567 or +27 82 123 4567"
+            maxLength={16}
+            returnKeyType="done"
+          />
         </View>
 
         <Text style={styles.sectionTitle}>02 / Payment</Text>
@@ -205,7 +373,9 @@ export default function CheckoutScreen() {
             accessibilityState={{ expanded: showPaymentOptions }}
             onPress={() => setShowPaymentOptions((expanded) => !expanded)}
           >
-            <Text style={styles.dropdownText}>{paymentMethod}</Text>
+            <Text style={styles.dropdownText}>
+              {paymentMethod === "EFT" ? "EFT bank transfer" : paymentMethod}
+            </Text>
             <Ionicons
               name={showPaymentOptions ? "chevron-up" : "chevron-down"}
               size={18}
@@ -233,7 +403,7 @@ export default function CheckoutScreen() {
                         selected && styles.paymentOptionSelected,
                       ]}
                     >
-                      {method}
+                      {method === "EFT" ? "EFT bank transfer" : method}
                     </Text>
                     {selected ? (
                       <Ionicons name="checkmark" size={18} color="#111111" />
@@ -245,40 +415,11 @@ export default function CheckoutScreen() {
           ) : null}
         </View>
 
-        {paymentMethod === "Debit / credit card" ? (
-          <>
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Card number *</Text>
-              <TextInput
-                style={styles.input}
-                value="4242 4242 4242 4242"
-                keyboardType="number-pad"
-              />
-            </View>
-
-            <View style={styles.rowFields}>
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>Expiry *</Text>
-                <TextInput style={styles.input} value="10 / 28" />
-              </View>
-              <View style={[styles.fieldGroup, styles.halfField]}>
-                <Text style={styles.fieldLabel}>CVC *</Text>
-                <TextInput
-                  style={styles.input}
-                  value="•••"
-                  keyboardType="number-pad"
-                  secureTextEntry
-                />
-              </View>
-            </View>
-          </>
-        ) : (
-          <Text style={styles.paymentMethodNote}>
-            {paymentMethod === "EFT bank transfer"
-              ? "Bank transfer instructions will be provided when you place your demo order."
-              : "Pay the delivery driver when your order arrives."}
-          </Text>
-        )}
+        <Text style={styles.paymentMethodNote}>
+          {paymentMethod === "EFT"
+            ? "Bank transfer instructions will be provided after the order is submitted."
+            : "Pay the delivery driver when your order arrives."}
+        </Text>
 
         <View style={styles.summaryBox}>
           <View style={styles.summaryRow}>
@@ -295,28 +436,39 @@ export default function CheckoutScreen() {
           </View>
         </View>
 
-        <View style={styles.termsRow}>
-          <View style={styles.checkBox} />
+        <TouchableOpacity
+          style={styles.termsRow}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: acceptTerms }}
+          onPress={() => setAcceptTerms((accepted) => !accepted)}
+        >
+          <View style={[styles.checkBox, acceptTerms && styles.checkedBox]}>
+            {acceptTerms ? (
+              <Ionicons name="checkmark" size={14} color="#ffffff" />
+            ) : null}
+          </View>
           <Text style={styles.termsText}>I agree to the Terms and illustrative delivery policy.</Text>
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
         style={[
           styles.primaryButton,
-          items.length === 0 && styles.disabledPrimaryButton,
+          (items.length === 0 || isSubmitting) && styles.disabledPrimaryButton,
         ]}
         activeOpacity={0.9}
-        disabled={items.length === 0}
+        disabled={items.length === 0 || isSubmitting}
         onPress={handlePlaceOrder}
         >
-        <Text style={styles.primaryButtonText}>Place order — R{total}</Text>
+        <Text style={styles.primaryButtonText}>
+          {isSubmitting ? "Submitting order..." : `Place order — R${total}`}
+        </Text>
         </TouchableOpacity>
 
         <Text style={styles.noteText}>
-          Demo checkout · No payment collected. Order tracking will be available in your account.
+          Final prices and delivery charges are confirmed by the server when your order is placed.
         </Text>
       </ScrollView>
-
+      <FeedbackDialog dialog={dialog} onClose={closeDialog} />
     </View>
   );
 }
@@ -635,8 +787,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: "#111111",
-    backgroundColor: "#111111",
+    backgroundColor: "#ffffff",
     marginRight: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkedBox: {
+    backgroundColor: "#111111",
   },
   termsText: {
     flex: 1,

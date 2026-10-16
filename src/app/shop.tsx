@@ -1,9 +1,11 @@
 import { ProductItem } from "@/components/ui/product-item";
 import { SizeSelector } from "@/components/ui/size-selector";
 import { useCart } from "@/components/cart-context";
+import { fetchShopProducts, type ShopProduct } from "@/lib/products";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,49 +14,59 @@ import {
   View,
 } from "react-native";
 
-const SAMPLE_PRODUCTS = [
-  {
-    id: "1",
-    name: "Community tee",
-    price: "R250",
-    subtitle: "White / Cotton / XS–XXL",
-    category: "T-shirts",
-    img: "https://unsplash.com",
-  },
-  {
-    id: "2",
-    name: "Everyday hoodie",
-    price: "R550",
-    subtitle: "Black / Cotton blend / S–XXL",
-    category: "Hoodies",
-    img: "https://unsplash.com",
-  },
-  {
-    id: "3",
-    name: "Together tote",
-    price: "R180",
-    subtitle: "Natural / Canvas / One size",
-    category: "Accessories",
-    img: "https://unsplash.com",
-  },
-];
-
 export default function ShopScreen() {
   const router = useRouter();
   const { addItem, items, itemCount, subtotal } = useCart();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
-  const [selectedProduct, setSelectedProduct] = useState<
-    (typeof SAMPLE_PRODUCTS)[0] | null
-  >(null);
+  const [products, setProducts] = useState<ShopProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(
+    null,
+  );
   const [selectedSize, setSelectedSize] = useState("M");
   const [quantity, setQuantity] = useState(1);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadProducts = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const result = await fetchShopProducts();
+        if (isCurrent) setProducts(result);
+      } catch (error) {
+        if (isCurrent) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Could not load products. Please try again.",
+          );
+        }
+      } finally {
+        if (isCurrent) setIsLoading(false);
+      }
+    };
+
+    void loadProducts();
+    return () => {
+      isCurrent = false;
+    };
+  }, [retryCount]);
 
   const selectedCartItem = selectedProduct
     ? items.find(
         (item) => item.id === selectedProduct.id && item.size === selectedSize,
       )
     : undefined;
+  const selectedVariant = selectedProduct?.variants.find(
+    (variant) => variant.size === selectedSize,
+  );
+  const selectedVariantInStock =
+    selectedVariant?.availability.toLowerCase() === "in stock";
 
   const quickCheckoutTotal = `R${subtotal.toLocaleString("en-ZA")}`;
   const quickCheckoutLabel =
@@ -63,12 +75,23 @@ export default function ShopScreen() {
       : `${itemCount} item${itemCount === 1 ? "" : "s"} in bag`;
 
   // Filter computation logic
-  const filteredProducts = SAMPLE_PRODUCTS.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+  const categories = Array.from(new Set(products.map((product) => product.category)));
+  const filteredProducts = products.filter((product) => {
+    const searchText = search.trim().toLowerCase();
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchText) ||
+      product.category.toLowerCase().includes(searchText) ||
+      product.subtitle.toLowerCase().includes(searchText);
     const matchesCategory =
-      activeCategory === "All" || p.category === activeCategory;
+      activeCategory === "All" || product.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const openProduct = (product: ShopProduct) => {
+    setQuantity(1);
+    setSelectedSize(product.sizes[0] ?? "");
+    setSelectedProduct(product);
+  };
 
   const checkoutShortcut = (
     <TouchableOpacity
@@ -110,7 +133,7 @@ export default function ShopScreen() {
 
           <View style={styles.detailImageContainer}>
             <ProductItem
-              imageUrl={selectedProduct.img}
+              imageUrl={selectedProduct.imageUrl}
               name={selectedProduct.name}
               price={selectedProduct.price}
               subtitle={selectedProduct.subtitle}
@@ -128,13 +151,13 @@ export default function ShopScreen() {
             </View>
 
             <SizeSelector
-              sizes={["XS", "S", "M", "L", "XL"]}
+              sizes={selectedProduct.sizes}
               selectedSize={selectedSize}
               onSelectSize={setSelectedSize}
             />
 
             <Text style={styles.availabilityText}>
-              XXL also available · In stock
+              {selectedProduct.inStock ? "In stock" : "Sold out"}
             </Text>
 
             {/* Counter Grid Panel */}
@@ -163,18 +186,21 @@ export default function ShopScreen() {
                 selectedCartItem && styles.bagButtonAdded,
               ]}
               activeOpacity={0.9}
-              disabled={Boolean(selectedCartItem)}
+              disabled={
+                Boolean(selectedCartItem) ||
+                !selectedProduct.inStock ||
+                !selectedVariantInStock
+              }
               onPress={() => {
                 addItem(
                   {
                     id: selectedProduct.id,
                     name: selectedProduct.name,
-                    unitPrice: Number(
-                      selectedProduct.price.replace(/[^0-9]/g, ""),
-                    ),
+                    unitPrice: selectedProduct.priceCents / 100,
                     subtitle: selectedProduct.subtitle,
                     category: selectedProduct.category,
-                    imageUrl: selectedProduct.img,
+                    imageUrl: selectedProduct.imageUrl ?? "",
+                    variants: selectedProduct.variants,
                   },
                   selectedSize,
                   quantity,
@@ -187,7 +213,9 @@ export default function ShopScreen() {
                   selectedCartItem && styles.bagButtonTextAdded,
                 ]}
               >
-                {selectedCartItem
+                {!selectedProduct.inStock
+                  ? "Sold out"
+                  : selectedCartItem
                   ? `In bag · ${selectedCartItem.quantity}`
                   : `Add to bag — ${selectedProduct.price}`}
               </Text>
@@ -234,11 +262,14 @@ export default function ShopScreen() {
         </View>
 
         {/* Filter Horizontal Badge Track */}
-        <View style={styles.categoryTrackRow}>
-          {["All", "T-shirts", "Hoodies"].map((cat) => {
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryTrackRow}
+        >
+          {["All", ...categories].map((cat) => {
             const isSelected = activeCategory === cat;
-            const countLabel =
-              cat === "All" ? ` (${SAMPLE_PRODUCTS.length})` : "";
+            const countLabel = cat === "All" ? ` (${products.length})` : "";
             return (
               <TouchableOpacity
                 key={cat}
@@ -260,28 +291,38 @@ export default function ShopScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
         <Text style={styles.resultsCountText}>
-          {filteredProducts.length} sample products · Sort: Featured ↓
+          {filteredProducts.length} products · Sort: Featured ↓
         </Text>
 
-        {/* Main Grid View */}
-        <View style={styles.productsGridContainer}>
-          {filteredProducts.map((product) => (
-            <ProductItem
-              key={product.id}
-              imageUrl={product.img}
-              name={product.name}
-              price={product.price}
-              subtitle={product.subtitle}
-              onPress={() => {
-                setQuantity(1);
-                setSelectedProduct(product);
-              }}
-            />
-          ))}
-        </View>
+        {isLoading ? (
+          <ActivityIndicator style={styles.loading} color="#111111" />
+        ) : loadError ? (
+          <View style={styles.loadMessage}>
+            <Text style={styles.loadMessageText}>{loadError}</Text>
+            <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)}>
+              <Text style={styles.retryText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.productsGridContainer}>
+            {filteredProducts.map((product) => (
+              <ProductItem
+                key={product.id}
+                imageUrl={product.imageUrl}
+                name={product.name}
+                price={product.price}
+                subtitle={product.subtitle}
+                onPress={() => openProduct(product)}
+              />
+            ))}
+            {filteredProducts.length === 0 && (
+              <Text style={styles.loadMessageText}>No products found.</Text>
+            )}
+          </View>
+        )}
 
         <Text style={styles.pricingDisclaimer}>
           Prices in ZAR · Delivery calculated at checkout.
@@ -429,6 +470,26 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     paddingHorizontal: 20,
+  },
+  loading: {
+    marginVertical: 32,
+  },
+  loadMessage: {
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  loadMessageText: {
+    color: "#777777",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  retryText: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 12,
+    textDecorationLine: "underline",
   },
   infoCalloutBlock: {
     width: "47%",

@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import {
   StyleSheet,
   Text,
@@ -9,7 +10,7 @@ import {
 } from "react-native";
 
 interface ProductItemProps {
-  imageUrl: string;
+  imageUrl: string | null;
   name: string;
   price: string;
   subtitle: string;
@@ -26,17 +27,34 @@ export function ProductItem({
   subtitle,
   onPress,
 }: ProductItemProps) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const showImage = imageUrl !== null && failedImageUrl !== imageUrl;
+  const categoryIcon = subtitle.toLowerCase().includes("canvas")
+    ? "bag-handle-outline"
+    : subtitle.toLowerCase().includes("cotton")
+      ? "shirt-outline"
+      : "pricetag-outline";
+
   return (
     <TouchableOpacity
       style={[styles.container, { width: itemWidth }]}
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Image
-        source={{ uri: imageUrl }}
-        style={styles.image}
-        resizeMode="cover"
-      />
+      {showImage && imageUrl ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.image}
+          resizeMode="cover"
+          onError={() => setFailedImageUrl(imageUrl)}
+          accessibilityLabel={`${name} product photo`}
+        />
+      ) : (
+        <View style={[styles.image, styles.imagePlaceholder]}>
+          <Ionicons name={categoryIcon} size={42} color="#8a8a8a" />
+          <Text style={styles.placeholderText}>Photo coming soon</Text>
+        </View>
+      )}
       <View style={styles.textRow}>
         <Text style={styles.name} numberOfLines={1}>
           {name}
@@ -58,6 +76,15 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 190,
     backgroundColor: "#f6f6f6",
+  },
+  imagePlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderText: {
+    marginTop: 8,
+    color: "#777777",
+    fontSize: 11,
   },
   textRow: {
     flexDirection: "row",

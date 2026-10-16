@@ -1,5 +1,24 @@
 # Welcome to your Expo app 👋
 
+## API configuration
+
+The API client is in [`src/lib/api.ts`](./src/lib/api.ts) and uses
+`https://lepara-api.onrender.com/api/v1/`. Its route paths match the backend's
+public product catalog and categories, customer authentication, profile,
+donation pledge, volunteer application, and order endpoints. The home and shop
+screens load product names, prices, categories, sizes, stock, and images from
+the public products endpoint. Authentication, profile/security, donation,
+volunteer, and order requests also use this shared client.
+
+The API should return JSON. Login and OTP verification responses may return an
+access token as `accessToken`, `access_token`, or `token`, either at the top
+level or under `data`. Native devices store the token with Expo SecureStore;
+web sessions remain in memory. Card details are intentionally not collected
+or sent by the app; card payment must be completed by a secure payment provider.
+Forms show inline field errors on blur or submit and use a centered dialog for
+validation and API feedback. Phone fields accept South African mobile numbers
+in local (`082 123 4567`) or international (`+27 82 123 4567`) format.
+
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
