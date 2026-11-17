@@ -5,6 +5,7 @@ import {
   useFeedbackDialog,
 } from "@/components/ui/feedback-dialog";
 import { FormField } from "@/components/ui/form-field";
+import { StatusStep } from "@/components/ui/status-step";
 import {
   API_ROUTES,
   ApiError,
@@ -51,6 +52,31 @@ function formatOrderDate(value: string): string {
   }).format(date);
 }
 
+function getCompletedOrderStep(statusLabel: string): number | null {
+  const status = statusLabel.toLowerCase();
+  if (status.includes("out for delivery")) return 2;
+  if (status.includes("delivered")) return 3;
+  if (
+    status.includes("on the way") ||
+    status.includes("ship") ||
+    status.includes("transit") ||
+    status.includes("dispatch")
+  ) {
+    return 2;
+  }
+  if (status.includes("pack") || status.includes("prepar")) return 1;
+  if (
+    status.includes("confirm") ||
+    status.includes("process") ||
+    status.includes("paid") ||
+    status.includes("pending") ||
+    status.includes("placed")
+  ) {
+    return 0;
+  }
+  return null;
+}
+
 function formatCountdown(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -84,6 +110,9 @@ export default function AccountScreen() {
   const [ordersRetryCount, setOrdersRetryCount] = useState(0);
   const [orderPage, setOrderPage] = useState(1);
   const [orderTotalPages, setOrderTotalPages] = useState(1);
+  const [selectedOrderNumber, setSelectedOrderNumber] = useState<string | null>(
+    null,
+  );
   const [validationContext, setValidationContext] =
     useState<ValidationContext>(null);
   const { dialog, showDialog, closeDialog } = useFeedbackDialog();
@@ -604,41 +633,166 @@ export default function AccountScreen() {
               </Text>
             ) : (
               <>
-                {orders.map((order) => (
-                  <View key={order.orderNumber} style={styles.orderCard}>
-                    <View style={styles.orderHeaderRow}>
-                      <View style={styles.orderHeading}>
-                        <Text style={styles.orderIdText}>
-                          {order.orderNumber}
-                        </Text>
-                        <Text style={styles.orderDateMeta}>
-                          {formatOrderDate(order.placedAt)}
-                        </Text>
-                      </View>
-                      <Text style={styles.orderStatusBadge}>
-                        {order.statusLabel}
-                      </Text>
+                {orders.map((order) => {
+                  const completedOrderStep = getCompletedOrderStep(
+                    order.statusLabel,
+                  );
+                  return (
+                    <View key={order.orderNumber}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Order ${order.orderNumber}, ${order.statusLabel}`}
+                        accessibilityHint="Show order status details"
+                        accessibilityState={{
+                          selected: selectedOrderNumber === order.orderNumber,
+                        }}
+                        style={[
+                          styles.orderCard,
+                          selectedOrderNumber === order.orderNumber &&
+                            styles.orderCardSelected,
+                        ]}
+                        onPress={() =>
+                          setSelectedOrderNumber((selected) =>
+                            selected === order.orderNumber
+                              ? null
+                              : order.orderNumber,
+                          )
+                        }
+                      >
+                        <View style={styles.orderHeaderRow}>
+                          <View style={styles.orderHeading}>
+                            <Text style={styles.orderIdText}>
+                              {order.orderNumber}
+                            </Text>
+                            <Text style={styles.orderDateMeta}>
+                              {formatOrderDate(order.placedAt)}
+                            </Text>
+                          </View>
+                          <Text style={styles.orderStatusBadge}>
+                            {order.statusLabel}
+                          </Text>
+                        </View>
+                        {order.firstItem ? (
+                          <View style={styles.orderItemSummary}>
+                            <Text style={styles.orderItemName}>
+                              {order.firstItem.name}
+                            </Text>
+                            <Text style={styles.productSpecsText}>
+                              {order.firstItem.size} · {order.itemCount}{" "}
+                              {order.itemCount === 1 ? "item" : "items"}
+                              {order.itemCount > 1 ? " in this order" : ""}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.orderFooterRow}>
+                          <Text style={styles.productSpecsText}>
+                            {order.paymentMethodLabel}
+                          </Text>
+                          <Text style={styles.orderTotalText}>
+                            {order.total}
+                          </Text>
+                        </View>
+                        <View style={styles.orderTapHint}>
+                          <Text style={styles.orderTapHintText}>
+                            {selectedOrderNumber === order.orderNumber
+                              ? "Hide order status"
+                              : "View order status"}
+                          </Text>
+                          <Ionicons
+                            name={
+                              selectedOrderNumber === order.orderNumber
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={16}
+                            color="#737373"
+                          />
+                        </View>
+                      </TouchableOpacity>
+                      {selectedOrderNumber === order.orderNumber ? (
+                        <View style={styles.trackingCard}>
+                          <View style={styles.trackingHeader}>
+                            <View style={styles.orderHeading}>
+                              <Text style={styles.orderIdText}>
+                                Order {order.orderNumber}
+                              </Text>
+                              <Text style={styles.orderDateMeta}>
+                                {formatOrderDate(order.placedAt)} ·{" "}
+                                {order.paymentMethodLabel}
+                              </Text>
+                            </View>
+                            <Text style={styles.orderStatusBadge}>
+                              {order.statusLabel}
+                            </Text>
+                          </View>
+                          {order.firstItem ? (
+                            <View style={styles.trackingItem}>
+                              <Text style={styles.orderItemName}>
+                                {order.firstItem.name} / {order.firstItem.size}
+                              </Text>
+                              {order.itemCount > 1 ? (
+                                <Text style={styles.productSpecsText}>
+                                  and {order.itemCount - 1}{" "}
+                                  {order.itemCount === 2
+                                    ? "other item"
+                                    : "other items"}
+                                </Text>
+                              ) : null}
+                            </View>
+                          ) : null}
+                          {completedOrderStep === null ? (
+                            <Text style={styles.trackingUnavailable}>
+                              Tracking updates are not available for this order
+                              yet.
+                            </Text>
+                          ) : (
+                            <>
+                              <StatusStep
+                                title="Order confirmed"
+                                subtitle={`Placed ${formatOrderDate(order.placedAt)}`}
+                                isCompleted={completedOrderStep >= 0}
+                              />
+                              <StatusStep
+                                title="Packed with care"
+                                subtitle={
+                                  completedOrderStep >= 1
+                                    ? "Completed"
+                                    : "Not completed"
+                                }
+                                isCompleted={completedOrderStep >= 1}
+                              />
+                              <StatusStep
+                                title="On the way"
+                                subtitle={
+                                  completedOrderStep >= 2
+                                    ? "Completed"
+                                    : "Not completed"
+                                }
+                                isCompleted={completedOrderStep >= 2}
+                              />
+                              <StatusStep
+                                title="Delivered"
+                                subtitle={
+                                  completedOrderStep >= 3
+                                    ? "Completed"
+                                    : "Not completed"
+                                }
+                                isCompleted={completedOrderStep >= 3}
+                                isLast
+                              />
+                            </>
+                          )}
+                          <View style={styles.trackingTotal}>
+                            <Text style={styles.productSpecsText}>Total</Text>
+                            <Text style={styles.orderTotalText}>
+                              {order.total}
+                            </Text>
+                          </View>
+                        </View>
+                      ) : null}
                     </View>
-                    {order.firstItem ? (
-                      <View style={styles.orderItemSummary}>
-                        <Text style={styles.orderItemName}>
-                          {order.firstItem.name}
-                        </Text>
-                        <Text style={styles.productSpecsText}>
-                          {order.firstItem.size} · {order.itemCount}{" "}
-                          {order.itemCount === 1 ? "item" : "items"}
-                          {order.itemCount > 1 ? " in this order" : ""}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={styles.orderFooterRow}>
-                      <Text style={styles.productSpecsText}>
-                        {order.paymentMethodLabel}
-                      </Text>
-                      <Text style={styles.orderTotalText}>{order.total}</Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
                 {ordersError ? (
                   <Text style={styles.ordersErrorText}>{ordersError}</Text>
                 ) : null}
@@ -1271,6 +1425,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0f0f0",
   },
+  orderCardSelected: {
+    borderColor: "#111111",
+    marginBottom: 8,
+  },
   orderHeaderRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1299,6 +1457,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  orderTapHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    marginTop: 10,
+    gap: 4,
+  },
+  orderTapHintText: {
+    fontSize: 12,
+    color: "#737373",
+  },
   orderTotalText: { fontSize: 15, fontWeight: "700", color: "#111111" },
   ordersMoreButton: {
     borderWidth: 1,
@@ -1315,6 +1484,33 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: "#f0f0f0",
+  },
+  trackingHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  trackingItem: {
+    paddingBottom: 14,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e9e9e9",
+  },
+  trackingUnavailable: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#737373",
+    marginBottom: 16,
+  },
+  trackingTotal: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#e9e9e9",
+    paddingTop: 12,
+    marginTop: 4,
   },
   orderIdText: { fontSize: 15, fontWeight: "700", color: "#000000" },
   orderDateMeta: { fontSize: 12, color: "#737373", marginTop: 2 },

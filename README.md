@@ -44,6 +44,28 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Build installable app packages
+
+After signing in to an Expo account and linking the project with `npx eas-cli init`,
+build an Android APK with:
+
+```bash
+npx eas-cli build --platform android --profile android-apk
+```
+
+The Android profile uses a local signing keystore in `.eas-credentials/` and
+`credentials.json`. These files are ignored by Git; keep them backed up securely to
+sign future app updates.
+
+Build the iOS Simulator app with:
+
+```bash
+npx eas-cli build --platform ios --profile ios-simulator
+```
+
+The iOS Simulator build is not installable on a physical iPhone. Building an iPhone
+IPA requires Apple Developer signing and provisioning.
+
 ## Get a fresh project
 
 When you're ready, run:

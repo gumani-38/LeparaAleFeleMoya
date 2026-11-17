@@ -8,9 +8,11 @@
     "scheme": "leparaalefelemoya",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.gumani.leparaalefelemoya"
     },
     "android": {
+      "package": "com.gumani.leparaalefelemoya",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,6 +40,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "de90d734-3012-4c50-b017-f267867bdb35"
+      }
+    },
+    "owner": "gumani"
   }
 }

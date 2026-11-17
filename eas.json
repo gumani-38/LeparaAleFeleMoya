@@ -1,0 +1,16 @@
+{
+  "build": {
+    "android-apk": {
+      "credentialsSource": "local",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "ios-simulator": {
+      "ios": {
+        "simulator": true
+      }
+    }
+  }
+}

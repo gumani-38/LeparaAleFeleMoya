@@ -3,8 +3,8 @@ import {
   StyleSheet,
   View,
   TextInput,
-  type NativeSyntheticEvent,
-  type TextInputKeyPressEventData,
+  type TextInputInstance,
+  type TextInputKeyPressEvent,
 } from "react-native";
 
 interface DigitInputProps {
@@ -14,7 +14,7 @@ interface DigitInputProps {
 
 export function DigitInput({ code, setCode }: DigitInputProps) {
   // Create an array of references to jump between input boxes automatically
-  const inputsRef = useRef<(TextInput | null)[]>([]);
+  const inputsRef = useRef<(TextInputInstance | null)[]>([]);
 
   const handleChangeText = (text: string, index: number) => {
     const updatedCode = [...code];
@@ -40,7 +40,7 @@ export function DigitInput({ code, setCode }: DigitInputProps) {
   };
 
   const handleKeyPress = (
-    e: NativeSyntheticEvent<TextInputKeyPressEventData>,
+    e: TextInputKeyPressEvent,
     index: number,
   ) => {
     // If user presses backspace and the box is empty, jump back to the previous box
