@@ -19,7 +19,7 @@ import {
   validateText,
 } from "@/lib/validation";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,6 +29,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type SelectFieldProps = {
   label: string;
@@ -170,7 +171,12 @@ function parseDonationEvent(value: unknown): DonationEvent {
 const validateOptionalEmail = (value: string) =>
   value.trim() ? validateEmail(value) : undefined;
 
-export default function GiveScreen() {
+export default function GivingFormScreen({
+  mode,
+}: {
+  mode: "donation" | "volunteer";
+}) {
+  const router = useRouter();
   const { initiativeId: initiativeIdParam } = useLocalSearchParams<{
     initiativeId?: string;
   }>();
@@ -238,14 +244,20 @@ export default function GiveScreen() {
           );
         const opportunities = await Promise.all(
           upcoming.map(async (initiative) => {
-            const tasksPayload = await apiRequest<unknown>(
-              API_ROUTES.initiativeTasks(initiative.initiativeId),
-            );
-            const tasksData = getResponseData(tasksPayload);
-            if (!Array.isArray(tasksData)) {
-              throw new ApiError("The volunteer task response was not in the expected format.", 0);
+              let tasks: VolunteerTask[] = [];
+              if (mode === "volunteer") {
+                const tasksPayload = await apiRequest<unknown>(
+                  API_ROUTES.initiativeTasks(initiative.initiativeId),
+                );
+                const tasksData = getResponseData(tasksPayload);
+                if (!Array.isArray(tasksData)) {
+                  throw new ApiError(
+                    "The volunteer task response was not in the expected format.",
+                    0,
+                  );
+                }
+                tasks = tasksData.map(parseVolunteerTask);
             }
-            const tasks = tasksData.map(parseVolunteerTask);
             return {
               initiativeId: initiative.initiativeId,
               title: initiative.title,
@@ -295,7 +307,7 @@ export default function GiveScreen() {
     return () => {
       isCurrent = false;
     };
-  }, [requestedInitiativeId, retryOpportunities]);
+  }, [mode, requestedInitiativeId, retryOpportunities]);
 
   const selectedOpportunity = volunteerOpportunities.find(
     ({ initiativeId }) => String(initiativeId) === volunteerInitiativeId,
@@ -474,20 +486,33 @@ export default function GiveScreen() {
   };
 
   return (
-    <>
+    <SafeAreaView style={styles.container} edges={["top"]}>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Brand Header */}
       <View style={styles.header}>
-        <Text style={styles.topLabel}>GET INVOLVED / TWO FORM STATES</Text>
-        <Text style={styles.mainTitle}>Give in your own way.</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={18} color="#111111" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.topLabel}>
+          GET INVOLVED / {mode === "donation" ? "DONATION" : "VOLUNTEER"}
+        </Text>
+        <Text style={styles.mainTitle}>
+          {mode === "donation" ? "Make a donation." : "Volunteer your time."}
+        </Text>
         <Text style={styles.description}>
-          Choose to donate or volunteer. Both forms are available below.
+          {mode === "donation"
+            ? "Share goods or make a contribution to support community initiatives."
+            : "Offer your time and skills to support an upcoming community initiative."}
         </Text>
       </View>
 
-      {/* ==========================================
-          01 DONATION FLOW
-         ========================================== */}
+      {mode === "donation" ? (
       <View style={styles.formContainer}>
         <View style={styles.formChip}>
           <Text style={styles.formChipText}>Donation pledge</Text>
@@ -614,12 +639,9 @@ export default function GiveScreen() {
           Our team will contact you to arrange next steps.
         </Text>
       </View>
+      ) : null}
 
-      <View style={styles.sectionSeparator} />
-
-      {/* ==========================================
-          02 VOLUNTEER FLOW
-         ========================================== */}
+      {mode === "volunteer" ? (
       <View style={styles.formContainer}>
         <View style={styles.formChip}>
           <Text style={styles.formChipText}>Volunteer application</Text>
@@ -765,13 +787,14 @@ export default function GiveScreen() {
           The team will review your request and confirm your task.
         </Text>
       </View>
+      ) : null}
 
       <Text style={styles.footerFineprint}>
-        Required fields marked * · Your details are sent securely to our team.
+        Required fields marked * · Your details are sent to our team.
       </Text>
     </ScrollView>
     <FeedbackDialog dialog={dialog} onClose={closeDialog} />
-    </>
+    </SafeAreaView>
   );
 }
 
@@ -784,6 +807,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 16,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  backButtonText: {
+    marginLeft: 6,
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "600",
   },
   topLabel: {
     fontSize: 10,
@@ -924,12 +960,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
     marginBottom: 10,
-  },
-  sectionSeparator: {
-    height: 1,
-    backgroundColor: "#eeeeee",
-    marginHorizontal: 20,
-    marginVertical: 24,
   },
   footerFineprint: {
     fontSize: 11,

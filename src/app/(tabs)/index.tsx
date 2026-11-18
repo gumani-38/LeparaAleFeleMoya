@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -59,6 +60,24 @@ export default function HomeScreen() {
         buttonText="Shop for a purpose"
         onButtonPress={() => router.push("/shop")}
       />
+
+      <TouchableOpacity
+        style={styles.aboutButton}
+        accessibilityRole="button"
+        onPress={() => router.push("/about")}
+        activeOpacity={0.85}
+      >
+        <View style={styles.aboutIcon}>
+          <Ionicons name="information-circle-outline" size={22} color="#183f35" />
+        </View>
+        <View style={styles.aboutCopy}>
+          <Text style={styles.aboutTitle}>About Lepara Ale Fele Moya</Text>
+          <Text style={styles.aboutDescription}>
+            Clothing, community, and everyday acts of care.
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#777777" />
+      </TouchableOpacity>
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Everyday essentials</Text>
@@ -165,6 +184,42 @@ const styles = StyleSheet.create({
     backgroundColor: "#eeeeee",
     marginHorizontal: 20,
     marginVertical: 12,
+  },
+  aboutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 24,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#e5e5e5",
+    borderRadius: 10,
+    backgroundColor: "#fafaf8",
+  },
+  aboutIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#e8eadf",
+    marginRight: 12,
+  },
+  aboutCopy: {
+    flex: 1,
+    marginRight: 8,
+  },
+  aboutTitle: {
+    color: "#111111",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  aboutDescription: {
+    color: "#666666",
+    fontSize: 11,
+    lineHeight: 16,
   },
   footerText: {
     fontSize: 11,

@@ -212,7 +212,7 @@ export default function EventsScreen() {
                   accessibilityRole="button"
                   onPress={() =>
                     router.push({
-                      pathname: "/give",
+                      pathname: "/volunteer",
                       params: {
                         initiativeId: detailedEvent.id,
                       },
@@ -231,7 +231,7 @@ export default function EventsScreen() {
                 accessibilityRole="button"
                 onPress={() =>
                   router.push({
-                    pathname: "/give",
+                    pathname: "/donate",
                     params: {
                       initiativeId: detailedEvent.id,
                     },

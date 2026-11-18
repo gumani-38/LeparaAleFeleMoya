@@ -95,12 +95,14 @@ export default function ShopScreen() {
 
   const checkoutShortcut = (
     <TouchableOpacity
-      style={[
-        styles.checkoutShortcut,
-        itemCount === 0 && styles.checkoutShortcutDisabled,
-      ]}
+      style={styles.checkoutShortcut}
+      accessibilityRole="button"
+      accessibilityLabel={
+        itemCount === 0
+          ? "Checkout, your bag is empty"
+          : `Checkout, ${itemCount} item${itemCount === 1 ? "" : "s"}, ${quickCheckoutTotal}`
+      }
       activeOpacity={0.9}
-      disabled={itemCount === 0}
       onPress={() => router.push("/checkout")}
     >
       <View style={styles.checkoutShortcutCopy}>
@@ -362,9 +364,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
-  },
-  checkoutShortcutDisabled: {
-    opacity: 0.65,
   },
   checkoutShortcutCopy: {
     flexShrink: 1,

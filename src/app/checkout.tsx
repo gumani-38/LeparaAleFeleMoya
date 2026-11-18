@@ -15,8 +15,10 @@ import {
   validateText,
 } from "@/lib/validation";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
 import {
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +27,35 @@ import {
 } from "react-native";
 
 const PAYMENT_METHODS = ["EFT", "Cash on delivery"] as const;
+
+function CartItemImage({
+  imageUrl,
+  name,
+}: {
+  imageUrl: string;
+  name: string;
+}) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const canShowImage = imageUrl.trim().length > 0 && failedImageUrl !== imageUrl;
+
+  return (
+    <View style={styles.itemImage}>
+      {canShowImage ? (
+        <Image
+          source={{ uri: imageUrl }}
+          style={styles.itemImageContent}
+          resizeMode="cover"
+          accessibilityLabel={`${name} product image`}
+          onError={() => setFailedImageUrl(imageUrl)}
+        />
+      ) : (
+        <View style={styles.itemImagePlaceholder}>
+          <Ionicons name="image-outline" size={26} color="#888888" />
+        </View>
+      )}
+    </View>
+  );
+}
 
 function createIdempotencyKey(): string {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
@@ -58,6 +89,7 @@ export default function CheckoutScreen() {
   const total = subtotal + delivery;
 
   const handlePlaceOrder = async () => {
+    if (isSubmitting) return;
     if (items.length === 0) return;
     if (!isAuthenticated || !token) {
       showDialog(
@@ -152,7 +184,7 @@ export default function CheckoutScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top"]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -196,7 +228,7 @@ export default function CheckoutScreen() {
         ) : (
           items.map((item) => (
             <View key={item.lineId} style={styles.itemRow}>
-              <View style={styles.itemImage} />
+              <CartItemImage imageUrl={item.imageUrl} name={item.name} />
               <View style={styles.itemMeta}>
                 <Text style={styles.productName}>{item.name}</Text>
                 <Text style={styles.productDetail}>
@@ -424,15 +456,21 @@ export default function CheckoutScreen() {
         <View style={styles.summaryBox}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>R{subtotal}</Text>
+            <Text style={styles.summaryValue}>
+              R{subtotal.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+            </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={styles.summaryValue}>R{delivery}</Text>
+            <Text style={styles.summaryValue}>
+              R{delivery.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+            </Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.summaryLabel}>Total</Text>
-            <Text style={styles.summaryValue}>R{total}</Text>
+            <Text style={styles.summaryValue}>
+              R{total.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}
+            </Text>
           </View>
         </View>
 
@@ -456,11 +494,25 @@ export default function CheckoutScreen() {
           (items.length === 0 || isSubmitting) && styles.disabledPrimaryButton,
         ]}
         activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isSubmitting
+            ? "Submitting order"
+            : `Place order for R${total.toLocaleString("en-ZA")}`
+        }
+        accessibilityState={{
+          disabled: items.length === 0 || isSubmitting,
+          busy: isSubmitting,
+        }}
         disabled={items.length === 0 || isSubmitting}
         onPress={handlePlaceOrder}
         >
         <Text style={styles.primaryButtonText}>
-          {isSubmitting ? "Submitting order..." : `Place order — R${total}`}
+          {isSubmitting
+            ? "Submitting order..."
+            : `Place order — R${total.toLocaleString("en-ZA", {
+                minimumFractionDigits: 2,
+              })}`}
         </Text>
         </TouchableOpacity>
 
@@ -469,7 +521,7 @@ export default function CheckoutScreen() {
         </Text>
       </ScrollView>
       <FeedbackDialog dialog={dialog} onClose={closeDialog} />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -579,6 +631,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#f0f0f0",
     marginRight: 14,
+    overflow: "hidden",
+  },
+  itemImageContent: {
+    width: "100%",
+    height: "100%",
+  },
+  itemImagePlaceholder: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   itemMeta: {
     flex: 1,

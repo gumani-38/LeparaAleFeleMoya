@@ -153,12 +153,6 @@ export default function AppTabs() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="checkout"
-        options={{
-          href: null,
-        }}
-      />
     </Tabs>
   );
 }
