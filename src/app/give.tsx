@@ -19,6 +19,7 @@ import {
   validateText,
 } from "@/lib/validation";
 import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -105,6 +106,12 @@ type VolunteerOpportunity = {
   dateLabel: string;
   tasks: VolunteerTask[];
 };
+type DonationEvent = {
+  initiativeId: number;
+  title: string;
+  dateLabel: string;
+  phase: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -142,7 +149,33 @@ function parseVolunteerTask(value: unknown): VolunteerTask {
   return { taskId: value.taskId, name: value.name };
 }
 
+function parseDonationEvent(value: unknown): DonationEvent {
+  if (
+    !isRecord(value) ||
+    typeof value.initiativeId !== "number" ||
+    typeof value.title !== "string" ||
+    typeof value.dateLabel !== "string" ||
+    typeof value.phase !== "string"
+  ) {
+    throw new ApiError("An event from the server was not in the expected format.", 0);
+  }
+  return {
+    initiativeId: value.initiativeId,
+    title: value.title,
+    dateLabel: value.dateLabel,
+    phase: value.phase,
+  };
+}
+
+const validateOptionalEmail = (value: string) =>
+  value.trim() ? validateEmail(value) : undefined;
+
 export default function GiveScreen() {
+  const { initiativeId: initiativeIdParam } = useLocalSearchParams<{
+    initiativeId?: string;
+  }>();
+  const requestedInitiativeId =
+    typeof initiativeIdParam === "string" ? initiativeIdParam : undefined;
   const { token } = useAuth();
   const [donateName, setDonateName] = useState("");
   const [donateEmail, setDonateEmail] = useState("");
@@ -151,6 +184,8 @@ export default function GiveScreen() {
   const [donateValue, setDonateValue] = useState("");
   const [donateConsent, setDonateConsent] = useState(false);
   const [donationCategory, setDonationCategory] = useState("Goods");
+  const [donationInitiativeId, setDonationInitiativeId] = useState("");
+  const [donationEvents, setDonationEvents] = useState<DonationEvent[]>([]);
   const [donationFormKey, setDonationFormKey] = useState(0);
 
   const [volunteerName, setVolunteerName] = useState("");
@@ -192,6 +227,7 @@ export default function GiveScreen() {
           throw new ApiError("The events response was not in the expected format.", 0);
         }
 
+        const donationEventList = data.map(parseDonationEvent);
         const upcoming = data
           .map(parseVolunteerInitiative)
           .filter(
@@ -220,15 +256,27 @@ export default function GiveScreen() {
         );
 
         if (isCurrent) {
-          const available = opportunities.filter(({ tasks }) => tasks.length > 0);
-          const selected = available[0];
+          const available = opportunities;
+          const selected =
+            available.find(
+              ({ initiativeId }) =>
+                String(initiativeId) === requestedInitiativeId,
+            ) ?? (requestedInitiativeId ? undefined : available[0]);
+          const selectedDonationEvent = donationEventList.find(
+            ({ initiativeId }) =>
+              String(initiativeId) === requestedInitiativeId,
+          );
+          setDonationEvents(
+            donationEventList.filter((event) => event.phase === "Upcoming"),
+          );
+          setDonationInitiativeId(
+            selectedDonationEvent ? String(selectedDonationEvent.initiativeId) : "",
+          );
           setVolunteerOpportunities(available);
           setVolunteerInitiativeId(
             selected ? String(selected.initiativeId) : "",
           );
-          setVolunteerTaskId(
-            String(selected?.tasks[0]?.taskId ?? ""),
-          );
+          setVolunteerTaskId("");
         }
       } catch (error) {
         if (isCurrent) {
@@ -247,16 +295,36 @@ export default function GiveScreen() {
     return () => {
       isCurrent = false;
     };
-  }, [retryOpportunities]);
+  }, [requestedInitiativeId, retryOpportunities]);
 
   const selectedOpportunity = volunteerOpportunities.find(
     ({ initiativeId }) => String(initiativeId) === volunteerInitiativeId,
   );
-  const taskOptions = selectedOpportunity?.tasks ?? [];
+  const taskOptions = [
+    { value: "", label: "General volunteering" },
+    ...(selectedOpportunity?.tasks ?? []).map((task) => ({
+      value: String(task.taskId),
+      label: task.name,
+    })),
+  ];
   const initiativeOptions = volunteerOpportunities.map((initiative) => ({
     value: String(initiative.initiativeId),
     label: `${initiative.title} - ${initiative.dateLabel}`,
   }));
+  const donationEventOptions = [
+    { value: "", label: "General donation" },
+    ...donationEvents.map((event) => ({
+      value: String(event.initiativeId),
+      label: `${event.title} - ${event.dateLabel}`,
+    })),
+  ];
+  const requestedOpportunityUnavailable =
+    requestedInitiativeId !== undefined &&
+    volunteerInitiativeId === "" &&
+    volunteerOpportunities.length > 0 &&
+    !volunteerOpportunities.some(
+      ({ initiativeId }) => String(initiativeId) === requestedInitiativeId,
+    );
 
   const clearDonationForm = () => {
     setDonateName("");
@@ -266,6 +334,7 @@ export default function GiveScreen() {
     setDonateValue("");
     setDonateConsent(false);
     setDonationCategory("Goods");
+    setDonationInitiativeId("");
     setDonationFormKey((key) => key + 1);
     setShowValidationFor(null);
     setOpenSelector(null);
@@ -282,9 +351,7 @@ export default function GiveScreen() {
     setVolunteerInitiativeId(
       firstOpportunity ? String(firstOpportunity.initiativeId) : "",
     );
-    setVolunteerTaskId(
-      firstOpportunity?.tasks[0] ? String(firstOpportunity.tasks[0].taskId) : "",
-    );
+    setVolunteerTaskId("");
     setVolunteerFormKey((key) => key + 1);
     setShowValidationFor(null);
     setOpenSelector(null);
@@ -319,6 +386,9 @@ export default function GiveScreen() {
           email,
           phone: donatePhone.trim(),
           category: donationCategory,
+          initiativeId: donationInitiativeId
+            ? Number(donationInitiativeId)
+            : null,
           description: donateDesc.trim(),
           estimatedValue: donateValue.trim() || null,
           consent: donateConsent,
@@ -345,7 +415,7 @@ export default function GiveScreen() {
     setShowValidationFor("volunteer");
     const validationError = validateFields([
       { value: volunteerName, validate: validateName("Full name") },
-      { value: email, validate: validateEmail },
+      ...(email ? [{ value: email, validate: validateEmail }] : []),
       { value: volunteerPhone, validate: validatePhone },
       { value: volunteerDesc, validate: validateText("Description", 10) },
       { value: volunteerAvail, validate: validateText("Availability", 3) },
@@ -358,10 +428,10 @@ export default function GiveScreen() {
       showDialog("Consent required", "Please consent to be contacted.");
       return;
     }
-    if (!selectedOpportunity || !volunteerTaskId) {
+    if (!selectedOpportunity) {
       showDialog(
-        "No volunteer task selected",
-        "Choose an available event and task before submitting your request.",
+        "No volunteer event selected",
+        "Choose an available event before submitting your request.",
       );
       return;
     }
@@ -373,10 +443,10 @@ export default function GiveScreen() {
         token,
         body: {
           fullName: volunteerName.trim(),
-          email,
+          email: email || null,
           phone: volunteerPhone.trim(),
           initiativeId: selectedOpportunity.initiativeId,
-          taskId: Number(volunteerTaskId),
+          taskId: volunteerTaskId ? Number(volunteerTaskId) : null,
           contribution: volunteerDesc.trim(),
           availability: volunteerAvail.trim(),
           consent: volunteerConsent,
@@ -411,8 +481,7 @@ export default function GiveScreen() {
         <Text style={styles.topLabel}>GET INVOLVED / TWO FORM STATES</Text>
         <Text style={styles.mainTitle}>Give in your own way.</Text>
         <Text style={styles.description}>
-          Choose to donate or volunteer. Both alternative form states are shown
-          below for review.
+          Choose to donate or volunteer. Both forms are available below.
         </Text>
       </View>
 
@@ -421,7 +490,7 @@ export default function GiveScreen() {
          ========================================== */}
       <View style={styles.formContainer}>
         <View style={styles.formChip}>
-          <Text style={styles.formChipText}>01 Donation · Goods or funds</Text>
+          <Text style={styles.formChipText}>Donation pledge</Text>
         </View>
 
         <FormField
@@ -463,7 +532,20 @@ export default function GiveScreen() {
         />
 
         <SelectField
-          label="Donation category *"
+          label="Event (optional)"
+          value={donationInitiativeId}
+          options={donationEventOptions}
+          expanded={openSelector === "donationEvent"}
+          onToggle={() =>
+            setOpenSelector((current) =>
+              current === "donationEvent" ? null : "donationEvent",
+            )
+          }
+          onSelect={(value) => selectOption(setDonationInitiativeId, value)}
+        />
+
+        <SelectField
+          label="Donation type *"
           value={donationCategory}
           options={["Goods", "Monetary", "School supplies", "Food and essentials"].map(
             (category) => ({ value: category, label: category }),
@@ -488,7 +570,7 @@ export default function GiveScreen() {
           maxLength={1000}
         />
         <FormField
-          label="Estimated value / amount (ZAR)"
+          label="Estimated value in rands (optional)"
           resetKey={donationFormKey}
           value={donateValue}
           onChangeText={setDonateValue}
@@ -525,7 +607,7 @@ export default function GiveScreen() {
           <Text style={styles.submitButtonText}>
             {submittingForm === "donation"
               ? "Submitting..."
-              : "Submit donation request"}
+              : "Submit donation pledge"}
           </Text>
         </TouchableOpacity>
         <Text style={styles.underNotice}>
@@ -540,49 +622,11 @@ export default function GiveScreen() {
          ========================================== */}
       <View style={styles.formContainer}>
         <View style={styles.formChip}>
-          <Text style={styles.formChipText}>02 Volunteer · Time or skills</Text>
+          <Text style={styles.formChipText}>Volunteer application</Text>
         </View>
 
-        <FormField
-          label="Full name *"
-          resetKey={volunteerFormKey}
-          value={volunteerName}
-          onChangeText={setVolunteerName}
-          validate={validateName("Full name")}
-          showValidation={showValidationFor === "volunteer"}
-          autoCapitalize="words"
-          autoComplete="name"
-          maxLength={80}
-        />
-        <FormField
-          label="Email *"
-          resetKey={volunteerFormKey}
-          value={volunteerEmail}
-          onChangeText={setVolunteerEmail}
-          keyboardType="email-address"
-          validate={validateEmail}
-          showValidation={showValidationFor === "volunteer"}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          placeholder="name@example.com"
-          maxLength={254}
-        />
-        <FormField
-          label="Phone *"
-          resetKey={volunteerFormKey}
-          value={volunteerPhone}
-          onChangeText={setVolunteerPhone}
-          keyboardType="phone-pad"
-          validate={validatePhone}
-          showValidation={showValidationFor === "volunteer"}
-          autoComplete="tel"
-          placeholder="082 123 4567 or +27 82 123 4567"
-          maxLength={16}
-        />
-
         <SelectField
-          label="Event supported *"
+          label="Event *"
           value={volunteerInitiativeId}
           options={initiativeOptions}
           expanded={openSelector === "volunteerEvent"}
@@ -593,25 +637,14 @@ export default function GiveScreen() {
           }
           onSelect={(value) => {
             setVolunteerInitiativeId(value);
-            const nextOpportunity = volunteerOpportunities.find(
-              ({ initiativeId }) => String(initiativeId) === value,
-            );
-            setVolunteerTaskId(
-              nextOpportunity?.tasks[0]
-                ? String(nextOpportunity.tasks[0].taskId)
-                : "",
-            );
+            setVolunteerTaskId("");
             setOpenSelector(null);
           }}
         />
-
         <SelectField
-          label="Task *"
+          label="Task (optional)"
           value={volunteerTaskId}
-          options={taskOptions.map((task) => ({
-            value: String(task.taskId),
-            label: task.name,
-          }))}
+          options={taskOptions}
           expanded={openSelector === "volunteerTask"}
           onToggle={() =>
             setOpenSelector((current) =>
@@ -633,16 +666,58 @@ export default function GiveScreen() {
           </View>
         ) : volunteerOpportunities.length === 0 ? (
           <Text style={styles.opportunityError}>
-            There are no upcoming volunteer events with available tasks.
+            There are no upcoming volunteer events.
+          </Text>
+        ) : requestedOpportunityUnavailable ? (
+          <Text style={styles.opportunityError}>
+            This event is not available for volunteering. Choose another event to continue.
           </Text>
         ) : null}
 
         <FormField
-          label="Describe your contribution *"
+          label="Full name *"
+          resetKey={volunteerFormKey}
+          value={volunteerName}
+          onChangeText={setVolunteerName}
+          validate={validateName("Full name")}
+          showValidation={showValidationFor === "volunteer"}
+          autoCapitalize="words"
+          autoComplete="name"
+          maxLength={80}
+        />
+        <FormField
+          label="Email (optional)"
+          resetKey={volunteerFormKey}
+          value={volunteerEmail}
+          onChangeText={setVolunteerEmail}
+          keyboardType="email-address"
+          validate={validateOptionalEmail}
+          showValidation={showValidationFor === "volunteer"}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          placeholder="name@example.com"
+          maxLength={254}
+        />
+        <FormField
+          label="Phone *"
+          resetKey={volunteerFormKey}
+          value={volunteerPhone}
+          onChangeText={setVolunteerPhone}
+          keyboardType="phone-pad"
+          validate={validatePhone}
+          showValidation={showValidationFor === "volunteer"}
+          autoComplete="tel"
+          placeholder="082 123 4567 or +27 82 123 4567"
+          maxLength={16}
+        />
+
+        <FormField
+          label="Describe how you can help *"
           resetKey={volunteerFormKey}
           value={volunteerDesc}
           onChangeText={setVolunteerDesc}
-          validate={validateText("Description", 10)}
+          validate={validateText("How you can help", 10)}
           showValidation={showValidationFor === "volunteer"}
           multiline
           maxLength={1000}
@@ -683,7 +758,7 @@ export default function GiveScreen() {
           <Text style={styles.submitButtonText}>
             {submittingForm === "volunteer"
               ? "Submitting..."
-              : "Submit volunteer request"}
+              : "Submit volunteer application"}
           </Text>
         </TouchableOpacity>
         <Text style={styles.underNotice}>

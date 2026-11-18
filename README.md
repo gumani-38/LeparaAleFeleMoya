@@ -7,8 +7,11 @@ The API client is in [`src/lib/api.ts`](./src/lib/api.ts) and uses
 public product catalog and categories, customer authentication, profile,
 donation pledge, volunteer application, and order endpoints. The home and shop
 screens load product names, prices, categories, sizes, stock, and images from
-the public products endpoint. Authentication, profile/security, donation,
-volunteer, and order requests also use this shared client.
+the public products endpoint. The events screen loads community initiatives
+from the public initiatives endpoint. Donation pledges can be linked to an
+initiative, and volunteer applications include the selected initiative with an
+optional task. Authentication, profile/security, donation, volunteer, and order
+requests also use this shared client.
 
 The API should return JSON. Login and OTP verification responses may return an
 access token as `accessToken`, `access_token`, or `token`, either at the top

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   StyleSheet,
   Text,
   View,
@@ -7,48 +8,130 @@ import {
   Image,
   TouchableOpacity,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { EventInfoRow } from "@/components/ui/event-info-row";
+import { API_ROUTES, ApiError, apiRequest, getResponseData } from "@/lib/api";
 
-const EVENTS_DATA = [
-  {
-    id: "e1",
-    status: "Upcoming",
-    badgeText: "Upcoming · Sample event",
-    dateLabel: "Upcoming · 24 Oct 2026",
-    title: "Community clothing drive",
-    time: "10:00–14:00 SAST",
-    location: "Orlando Community Hall, Soweto",
-    image: "https://unsplash.com",
-    shortDesc: "Donate clothing or volunteer to sort and prepare bundles.",
-    headline: "A morning of practical care.",
-    longDesc:
-      "Help sort clothing, prepare donation bundles and welcome neighbors. Bring clean, wearable clothing and blankets, or contribute your time.",
-  },
-  {
-    id: "e2",
-    status: "Completed",
-    badgeText: "Completed · 26 Sep 2026",
-    dateLabel: "Completed · 26 Sep 2026",
-    title: "Spring community day",
-    time: "09:00–13:00 SAST",
-    location: "Mofolo Community Garden, Soweto",
-    image: "https://unsplash.com",
-    shortDesc: "A sample recap of a shared morning in the garden.",
-    headline: "Cultivating sustainable roots together.",
-    longDesc:
-      "Our community garden cleanup was a great success. Thanks to all neighbors who joined us to clear plots and sow seeds for the upcoming season.",
-  },
-];
+type EventStatus = "Upcoming" | "Completed";
+type CommunityEvent = {
+  id: string;
+  status: EventStatus;
+  dateLabel: string;
+  title: string;
+  time: string;
+  location: string;
+  image: string | null;
+  shortDesc: string;
+  longDesc: string;
+  donationNeeds: string | null;
+  volunteersRequired: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseEvent(value: unknown): CommunityEvent {
+  if (
+    !isRecord(value) ||
+    typeof value.initiativeId !== "number" ||
+    typeof value.title !== "string" ||
+    (value.phase !== "Upcoming" && value.phase !== "Completed") ||
+    typeof value.dateLabel !== "string" ||
+    (value.timeLabel !== null && typeof value.timeLabel !== "string") ||
+    (value.location !== null && typeof value.location !== "string") ||
+    (value.imageUrl !== null && typeof value.imageUrl !== "string") ||
+    typeof value.summary !== "string" ||
+    typeof value.description !== "string" ||
+    (value.donationNeeds !== null && typeof value.donationNeeds !== "string") ||
+    typeof value.volunteersRequired !== "boolean"
+  ) {
+    throw new ApiError("An event from the server was not in the expected format.", 0);
+  }
+
+  return {
+    id: String(value.initiativeId),
+    status: value.phase,
+    dateLabel: value.dateLabel,
+    title: value.title,
+    time: value.timeLabel ?? "Time to be confirmed",
+    location: value.location ?? "Location to be confirmed",
+    image: value.imageUrl,
+    shortDesc: value.summary,
+    longDesc: value.description,
+    donationNeeds: value.donationNeeds,
+    volunteersRequired: value.volunteersRequired,
+  };
+}
 
 export default function EventsScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState<"All" | "Upcoming" | "Completed">("All");
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Filter items matching layout configuration rules
-  const displayedEvents = EVENTS_DATA.filter(
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadEvents = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const payload = await apiRequest<unknown>(
+          `${API_ROUTES.initiatives}?page=1&pageSize=50`,
+        );
+        const data = getResponseData(payload);
+        if (!Array.isArray(data)) {
+          throw new ApiError("The events response was not in the expected format.", 0);
+        }
+
+        const loadedEvents = data.map(parseEvent);
+        if (isCurrent) setEvents(loadedEvents);
+      } catch (error) {
+        if (isCurrent) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Could not load events. Please try again.",
+          );
+        }
+      } finally {
+        if (isCurrent) setIsLoading(false);
+      }
+    };
+
+    void loadEvents();
+    return () => {
+      isCurrent = false;
+    };
+  }, [retryCount]);
+
+  const displayedEvents = events.filter(
     (ev) => filter === "All" || ev.status === filter,
   );
-  const detailedEvent = EVENTS_DATA.find((ev) => ev.id === activeEventId);
+  const detailedEvent = events.find((ev) => ev.id === activeEventId);
+
+  if (isLoading) {
+    return (
+      <View style={styles.statusContainer}>
+        <ActivityIndicator color="#111111" />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusMessage}>{loadError}</Text>
+        <TouchableOpacity onPress={() => setRetryCount((count) => count + 1)}>
+          <Text style={styles.retryText}>Try again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Deep Dive Detail Screen Variant
   if (detailedEvent) {
@@ -65,23 +148,31 @@ export default function EventsScreen() {
         <View style={styles.detailLayoutContent}>
           <View style={styles.blackBadge}>
             <Text style={styles.blackBadgeText}>
-              {detailedEvent.badgeText.toUpperCase()}
+              {`${detailedEvent.status} · ${detailedEvent.dateLabel}`.toUpperCase()}
             </Text>
           </View>
           <Text style={styles.microCategoryLabel}>COMMUNITY EVENT</Text>
           <Text style={styles.detailMainTitle}>{detailedEvent.title}</Text>
 
-          <Image
-            source={{ uri: detailedEvent.image }}
-            style={styles.heroDetailImage}
-            resizeMode="cover"
-          />
+          {detailedEvent.image ? (
+            <Image
+              source={{ uri: detailedEvent.image }}
+              style={styles.heroDetailImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View
+              style={[styles.heroDetailImage, styles.imagePlaceholder]}
+            >
+              <Text style={styles.imagePlaceholderText}>No image available</Text>
+            </View>
+          )}
 
           {/* Time and Venue block grid rows */}
           <View style={styles.metaBlock}>
             <EventInfoRow
               icon="calendar-outline"
-              text={`${detailedEvent.dateLabel.split(" · ")[1]} · ${detailedEvent.time}`}
+              text={`${detailedEvent.dateLabel} · ${detailedEvent.time}`}
             />
             <EventInfoRow
               icon="location-outline"
@@ -92,7 +183,7 @@ export default function EventsScreen() {
           <View style={styles.separatorLine} />
 
           {/* Context textual details paragraphs layout */}
-          <Text style={styles.detailHeadline}>{detailedEvent.headline}</Text>
+          <Text style={styles.detailHeadline}>{detailedEvent.shortDesc}</Text>
           <Text style={styles.detailBodyParagraph}>
             {detailedEvent.longDesc}
           </Text>
@@ -100,28 +191,52 @@ export default function EventsScreen() {
           {detailedEvent.status === "Upcoming" ? (
             <>
               <Text style={styles.sectionHeadingLabel}>Ways to help</Text>
-              <Text style={styles.bulletItem}>
-                <Text style={styles.boldText}>Donate /</Text> Clothing, blankets
-                or reusable bags.
-              </Text>
-              <Text style={styles.bulletItem}>
-                <Text style={styles.boldText}>Volunteer /</Text> Clothing
-                sorting, bundle packing or the welcome desk.
-              </Text>
+              {detailedEvent.donationNeeds ? (
+                <Text style={styles.bulletItem}>
+                  <Text style={styles.boldText}>Donate /</Text>{" "}
+                  {detailedEvent.donationNeeds}.
+                </Text>
+              ) : null}
+              {detailedEvent.volunteersRequired ? (
+                <Text style={styles.bulletItem}>
+                  <Text style={styles.boldText}>Volunteer /</Text> Help at this
+                  community event.
+                </Text>
+              ) : null}
 
               {/* Functional CTA Interactive Button blocks */}
-              <TouchableOpacity
-                style={styles.primaryBlackBtn}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.primaryBlackBtnText}>
-                  Volunteer for this event
-                </Text>
-              </TouchableOpacity>
+              {detailedEvent.volunteersRequired ? (
+                <TouchableOpacity
+                  style={styles.primaryBlackBtn}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/give",
+                      params: {
+                        initiativeId: detailedEvent.id,
+                      },
+                    })
+                  }
+                >
+                  <Text style={styles.primaryBlackBtnText}>
+                    Volunteer for this event
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
 
               <TouchableOpacity
                 style={styles.secondaryOutlineBtn}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push({
+                    pathname: "/give",
+                    params: {
+                      initiativeId: detailedEvent.id,
+                    },
+                  })
+                }
               >
                 <Text style={styles.secondaryOutlineBtnText}>
                   Donate to this event
@@ -150,7 +265,7 @@ export default function EventsScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.hubHeaderContainer}>
         <Text style={styles.microCollectionLabel}>
-          COMMUNITY / SAMPLE EVENTS
+          COMMUNITY / EVENTS
         </Text>
         <Text style={styles.hubMainHeadingTitle}>Better, together.</Text>
         <Text style={styles.hubDescriptionParagraph}>
@@ -162,8 +277,7 @@ export default function EventsScreen() {
       <View style={styles.filterTrackRow}>
         {(["All", "Upcoming", "Completed"] as const).map((type) => {
           const isSelected = filter === type;
-          const countModifier =
-            type === "All" ? ` (${EVENTS_DATA.length})` : "";
+          const countModifier = type === "All" ? ` (${events.length})` : "";
           return (
             <TouchableOpacity
               key={type}
@@ -186,13 +300,27 @@ export default function EventsScreen() {
 
       {/* Structured Card Feed */}
       <View style={styles.feedWrapperList}>
-        {displayedEvents.map((item) => (
+        {displayedEvents.length === 0 ? (
+          <Text style={styles.statusMessage}>
+            No {filter.toLowerCase()} events right now.
+          </Text>
+        ) : displayedEvents.map((item) => (
           <View key={item.id} style={styles.cardContainer}>
-            <Image
-              source={{ uri: item.image }}
-              style={styles.cardCoverImage}
-              resizeMode="cover"
-            />
+            {item.image ? (
+              <Image
+                source={{ uri: item.image }}
+                style={styles.cardCoverImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={[styles.cardCoverImage, styles.imagePlaceholder]}
+              >
+                <Text style={styles.imagePlaceholderText}>
+                  No image available
+                </Text>
+              </View>
+            )}
 
             <View style={styles.cardContentWrapper}>
               <View
@@ -201,7 +329,9 @@ export default function EventsScreen() {
                   item.status === "Completed" && styles.statusBadgeCompleted,
                 ]}
               >
-                <Text style={styles.statusBadgeText}>{item.dateLabel}</Text>
+                <Text style={styles.statusBadgeText}>
+                  {item.status} · {item.dateLabel}
+                </Text>
               </View>
 
               <Text style={styles.cardMainTitle}>{item.title}</Text>
@@ -242,6 +372,26 @@ export default function EventsScreen() {
 }
 
 const styles = StyleSheet.create({
+  statusContainer: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  statusMessage: {
+    color: "#666666",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  retryText: {
+    color: "#111111",
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 12,
+    textDecorationLine: "underline",
+  },
   container: {
     flex: 1,
     backgroundColor: "#ffffff",
@@ -311,6 +461,14 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 190,
     backgroundColor: "#f6f6f6",
+  },
+  imagePlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePlaceholderText: {
+    color: "#737373",
+    fontSize: 13,
   },
   cardContentWrapper: {
     paddingTop: 16,
