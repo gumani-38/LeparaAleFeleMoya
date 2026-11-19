@@ -36,6 +36,29 @@ const nextSteps = [
   },
 ];
 
+const communityInitiatives = [
+  {
+    title: "Clothing donations",
+    description: "Sharing garments with people who need practical support.",
+    icon: "shirt-outline" as const,
+  },
+  {
+    title: "Sanitary pad drives",
+    description: "Helping girls and women access essential period supplies.",
+    icon: "heart-outline" as const,
+  },
+  {
+    title: "School talks",
+    description: "Encouraging young people through conversations at school.",
+    icon: "school-outline" as const,
+  },
+  {
+    title: "Winter feeding",
+    description: "Offering food and care during the colder months.",
+    icon: "sunny-outline" as const,
+  },
+];
+
 export default function AboutScreen() {
   const router = useRouter();
 
@@ -90,13 +113,75 @@ export default function AboutScreen() {
 
       <View style={styles.introSection}>
         <Text style={styles.sectionEyebrow}>LEPARA ALE FELE MOYA</Text>
-        <Text style={styles.sectionTitle}>Purpose in everyday moments.</Text>
+        <Text style={styles.sectionTitle}>A community that helps people keep going.</Text>
         <Text style={styles.bodyText}>
-          Lepara Ale Fele Moya brings clothing, community, and everyday acts of
-          care together. Find community events, ways to contribute through
-          donations or volunteering, and an everyday collection made to carry
-          that purpose with you.
+          Lepara Ale Fele Moya is a community-based upliftment initiative
+          supporting people through difficult circumstances with practical help,
+          encouragement, and the reminder that they are not alone.
         </Text>
+      </View>
+
+      <View style={styles.storySection}>
+        <View style={styles.storyCard}>
+          <View style={styles.storyIcon}>
+            <Ionicons name="location-outline" size={20} color="#183f35" />
+          </View>
+          <Text style={styles.sectionEyebrow}>WHERE IT BEGAN</Text>
+          <Text style={styles.storyTitle}>Rooted in Ga-Rankuwa.</Text>
+          <Text style={styles.bodyText}>
+            Founded in Ga-Rankuwa, Pretoria, by Wilfred (Willy) Kegomoditswe
+            Thathane, the organisation grew from a simple belief: when people
+            face hard times, a caring community can help them find hope and
+            keep moving forward.
+          </Text>
+        </View>
+
+        <View style={styles.missionCard}>
+          <Text style={styles.missionEyebrow}>THE MISSION</Text>
+          <Text style={styles.missionTitle}>
+            Encourage people not to give up.
+          </Text>
+          <Text style={styles.missionText}>
+            Every initiative is an invitation to show up for one another,
+            volunteer, and build a stronger, more caring community.
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.initiativesSection}>
+        <Text style={styles.sectionEyebrow}>CARE IN ACTION</Text>
+        <Text style={styles.sectionTitle}>Small acts. Meaningful support.</Text>
+        <Text style={[styles.bodyText, styles.initiativesIntro]}>
+          The organisation brings its mission to life through community
+          initiatives such as:
+        </Text>
+        <View style={styles.initiativesList}>
+          {communityInitiatives.map((initiative) => (
+            <View key={initiative.title} style={styles.initiativeCard}>
+              <View style={styles.initiativeIcon}>
+                <Ionicons name={initiative.icon} size={20} color="#183f35" />
+              </View>
+              <View style={styles.initiativeCopy}>
+                <Text style={styles.initiativeTitle}>{initiative.title}</Text>
+                <Text style={styles.initiativeDescription}>
+                  {initiative.description}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.platformCard}>
+        <Ionicons name="people-outline" size={22} color="#e2b27b" />
+        <View style={styles.platformCopy}>
+          <Text style={styles.platformTitle}>A shared place to get involved.</Text>
+          <Text style={styles.platformText}>
+            This app brings events, donations, and volunteering together, making
+            it easier for the organisation and community to stay connected and
+            take part.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.stepsSection}>
@@ -310,6 +395,121 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     marginTop: 10,
+  },
+  storySection: {
+    gap: 12,
+    marginBottom: 28,
+  },
+  storyCard: {
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#ebe9e1",
+  },
+  storyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "#e5eee7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  storyTitle: {
+    color: "#1d2923",
+    fontSize: 19,
+    fontWeight: "800",
+    lineHeight: 24,
+  },
+  missionCard: {
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: "#efe7d9",
+  },
+  missionEyebrow: {
+    color: "#8a6847",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+    marginBottom: 8,
+  },
+  missionTitle: {
+    color: "#1d2923",
+    fontSize: 18,
+    fontWeight: "800",
+    lineHeight: 24,
+  },
+  missionText: {
+    color: "#636760",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 7,
+  },
+  initiativesSection: {
+    marginBottom: 24,
+    paddingHorizontal: 2,
+  },
+  initiativesIntro: {
+    marginBottom: 14,
+  },
+  initiativesList: {
+    gap: 9,
+  },
+  initiativeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 13,
+    borderRadius: 15,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#ebe9e1",
+  },
+  initiativeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: "#f4e9dc",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  initiativeCopy: {
+    flex: 1,
+  },
+  initiativeTitle: {
+    color: "#202a24",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  initiativeDescription: {
+    color: "#70736d",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  platformCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: 16,
+    marginBottom: 28,
+    borderRadius: 15,
+    backgroundColor: "#263c31",
+  },
+  platformCopy: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  platformTitle: {
+    color: "#fffaf1",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 5,
+  },
+  platformText: {
+    color: "#d8e0d9",
+    fontSize: 12,
+    lineHeight: 18,
   },
   stepsSection: {
     paddingHorizontal: 2,
